@@ -1,3 +1,5 @@
+__author__ = "Marko Maric"
+__copyright__ = "Copyright 2018, Croatian Academic and Research Network (CARNET)"
 
 flatset = lambda x: set([j for i in x for j in i])
 
