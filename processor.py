@@ -1,3 +1,5 @@
+__author__ = "Marko Maric"
+__copyright__ = "Copyright 2018, Croatian Academic and Research Network (CARNET)"
 
 import WebDfcAlg
 
