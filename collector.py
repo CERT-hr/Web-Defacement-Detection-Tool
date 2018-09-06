@@ -32,7 +32,7 @@ import urllib2
 
 sys.stdout = codecs.getwriter('utf-8')(sys.stdout)  #treba za printanje Unicoda u file
 
-conn = psycopg2.connect("dbname='webdfcdb2' user='webdfc' host='localhost' password='webdfc'")
+conn = psycopg2.connect("dbname='webdfcdb4' user='webdfc' host='localhost' password='webdfc'")
 
 
 display = Display(visible=0, size=(800, 600))
