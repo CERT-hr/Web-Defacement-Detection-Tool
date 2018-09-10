@@ -29,7 +29,7 @@ Script takes necessary input from database and calls for signature detection alg
 then saves resulting signature output back to database. All signatures older than 3 years are deleted from database.
 
 ### crawler.py
-Scripts reads domains.list file and scans all URLs in file for possible signature detection. 
+Script reads domains.list file and scans all URLs in file for possible signature detection. 
 Chrome web driver over Selenium is used to retrieve elements from scanned webpages, which are then compared against detected signatures. 
 Comparison algorithm is to be further improved and described afterwards. 
 Script returns scan result for each URL, with information if any signature and associated defacer are detected.
