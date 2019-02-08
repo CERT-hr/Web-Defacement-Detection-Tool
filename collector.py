@@ -8,6 +8,7 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.alert import Alert
+from selenium.webdriver.common.keys import Keys
 
 from selenium.common.exceptions import TimeoutException, UnexpectedAlertPresentException, StaleElementReferenceException
 import time as time_
@@ -19,7 +20,7 @@ import sys  #for exit()
 import codecs
 
 import re
-import spamsum
+import ssdeep
 
 import psycopg2
 
@@ -30,7 +31,9 @@ import time
 
 import urllib2
 
-sys.stdout = codecs.getwriter('utf-8')(sys.stdout)  #treba za printanje Unicoda u file
+import captcha
+
+sys.stdout = codecs.getwriter('utf-8')(sys.stdout)  #needed for sending Unicode to file
 
 conn = psycopg2.connect("dbname='webdfcdb4' user='webdfc' host='localhost' password='webdfc'")
 
@@ -97,7 +100,8 @@ def filterValidElements(elements):
 def insertInDatabase(notifier, time, url, elements, mirrorsrc):
 
     #Insert in database
-    print elements
+    print "insertInDatabase\n"
+    print notifier, time, url, sys.getsizeof(elements), mirrorsrc
     print "\n"
  
     dataType = lambda basictype, size: 'L' + basictype if size <= 1000 else 'H' + basictype
@@ -145,8 +149,8 @@ def insertInDatabase(notifier, time, url, elements, mirrorsrc):
     
 
 def calculateFuzzy(elements):
-    print "**********************************************************************************************\n"
-    print elements
+    #print "**********************************************************************************************\n"
+    #print elements
 
     pics = {}
     for key, value in elements.iteritems():
@@ -156,28 +160,29 @@ def calculateFuzzy(elements):
             for url in value:
                 try:
                     if not url in pics:
+                        #TODO: images are already present on system. How to avoid double download. Doing crawling this will be crucial.
                         pic = urllib2.urlopen(url).read()
                         pics[url] = pic
                 except (urllib2.HTTPError, urllib2.URLError) as e:
-                    print "Not able to download image: %s\n" % (url, )
+                    print "Not able to download image (%s).\n" % (url, )
                     pics[url] = None
                 except ValueError as e:
                     if 'unknown url type' in str(e):
-                        print "Incorrectly formatted URL.\n"
+                        print "Incorrectly formatted URL (%s).\n" % (url, )
                         pics[url] = None
                     else:
                         raise e
 
             elements[key] = filter(lambda (x, y, z): not y == None, \
-                            map(  lambda x: (None, None, x) if pics[x] == None else (pics[x], spamsum.spamsum(pics[x]), x) , value))
+                            map(  lambda x: (None, None, x) if pics[x] == None else (pics[x], ssdeep.hash(pics[x]), x) , value))
 
         elif key in ('alerts', 'texts'):
 
-            elements[key] = map(  lambda x: (x, spamsum.spamsum(x.encode('utf-8')), None) , value)
+            elements[key] = map(  lambda x: (x, ssdeep.hash(x.encode('utf-8')), None) , value)
 
         else:   #music
 
-            elements[key] = map(lambda x: (x.split(u'?')[0], spamsum.spamsum(x.split(u'?')[0]), x), value) 
+            elements[key] = map(lambda x: (x.split(u'?')[0], ssdeep.hash(x.split(u'?')[0]), x), value) 
 
     return elements
 
@@ -188,6 +193,7 @@ def getElementContent(allElems):
     return allElems
 
 
+#captcha cannot appear here, so will not be handling code
 def getElements(mirrorsrc):
 
     #creating dictionary of Elements
@@ -206,7 +212,7 @@ def getElements(mirrorsrc):
                                 EC.presence_of_element_located((By.TAG_NAME, "body"))
                                 )
                 except TimeoutException as e:
-                    print "Time elapsed for zone-h page processing getElements\n"
+                    print "Time elapsed for zonehmirrors.org processing (getElements)\n"
                     break
                 else:
                     time_.sleep(2)  #safety hold in case HTML is not fully loaded, and time for potential another alert
@@ -251,7 +257,7 @@ def getElements(mirrorsrc):
 
 
             except UnexpectedAlertPresentException as e:
-                print "Accepting alert in getElements: %s\n" % (Alert(browser).text,)
+                print "Accepting alert in zonehmirrors.org processing (getElements): %s\n" % (Alert(browser).text,)
 
                 allElems['alerts'].append(Alert(browser).text)
                 allElems['texts'] = []
@@ -267,11 +273,12 @@ def getElements(mirrorsrc):
                 Alert(browser).accept()
 
     except:
-        print "Unsuccessful processing of getElements\n"
+        print "Unsuccessful processing of zonehmirrors.org (getElements)\n"
         print traceback.format_exc()
         print "\n"
 
 
+    #TODO: I don't want to take partial set of elements! Algorithm will give wrong outputs.
     allElemsWithContent = getElementContent(allElems)
 
     return allElemsWithContent
@@ -289,26 +296,78 @@ def process_zoneh_pages(f):
 
     i = -1
 
-    for pagenum in range(1, 3):     #looking for defaces in first two pages
+    for pagenum in range(1, 2):     #looking for defaces in first two pages
 
         try:
-            print pagenum
+            print "Downloading zone-h.org page: %s\n" % pagenum
 
             #TODO: Connecting over TOR (captcha recognition and change of circuit)
             browser.get('http://zone-h.org/archive/page=%d' % (pagenum,))
+            
+            havepage = False
 
-            try:
-                WebDriverWait(browser, 10).until(
-                            EC.presence_of_element_located((By.ID, "ldeface"))
-                            )
+            for k in range(1, 5):   #Loop of uncorrectly solved captachas
 
-            except TimeoutException as e:
-                print "Time elapsed for zone-h page processing\n"
+                try:
+                    WebDriverWait(browser, 10).until(
+                                EC.presence_of_element_located((By.ID, "ldeface"))  #TODO: wait for ldeface OR propdeface. How to handle flows in that case?
+                                )
 
-            else:
+                except TimeoutException as e:
+
+                    WebDriverWait(browser, 5).until(
+                                EC.presence_of_element_located((By.ID, "propdeface"))
+                                )
+                    
+                    #In case of timeout on ldeface, we are checking if captcha is present.
+                    #If captcha is not present generic exception handling code will take over control.
+                    #Next page will tried to be downloaded.
+                    #This differs from v0.9 that continued to scan next page immedatelly.
+                    #Software robustness(resiliency) is kept.
+                    #Timeout message will be printed out as part of GEH code.
+                    #print "Time elapsed for zone-h page processing\n"
+
+                    #Here captcha is resolved
+
+                    cookies = browser.get_cookies()
+                    cookie = ' '.join([i['name'] + '=' + i['value'] + ';' for i in cookies])
+
+                    url = browser.find_elements_by_xpath("//*[@id='cryptogram']")[0].get_attribute('src')
+
+                    req = urllib2.Request(url)
+                    req.add_header('Cookie', cookie)
+                    resp = urllib2.urlopen(req)
+                    pic = resp.read()
+
+                    f = open("captcha.png", "wb")
+                    f.write(pic)
+                    f.close()
+                  
+                    try: 
+                        solution = captcha.solve_captcha('captcha.png')
+                        elem = browser.find_element_by_name("captcha")
+                        print "Captcha solved in process_zoneh_pages (%s).\n" % solution
+                        elem.send_keys(solution)
+                        elem.submit()
+                    except:
+                        print "Something wrong in solving captcha.\n"
+                        print traceback.format_exc()
+                        print "\n"
+
+                else:
+                    havepage = True
+                    break
+
+            if havepage:
+
                 mirrors = browser.find_elements_by_link_text('mirror')
                 ntdata = map(lambda x: x.find_elements_by_xpath("../../*"), mirrors)
                 data = map(lambda (x, y): (x[0].text, x[1].text, y.get_attribute('href')), zip(ntdata, mirrors))
+
+                #TODO: [HIGH PRIORITY] If there is unsuccessful processing for some page which contains (ctime, cnotifier, cmirror), code will continue
+                #download next pages that have mirrors already in database. Do I deduplicate in that case?
+                #CHECK DONE: in insertInDatabase is seen that new deface is always inserted in database.
+                #(time, notifier_id, url, mirrorsrc) tuple gives unique deface id that can be used for deduplication
 
                 allData += data
 
@@ -317,8 +376,14 @@ def process_zoneh_pages(f):
                     allData = list(reversed(allData[:i]))
                     break
 
+            else:
+
+                #captchas uncorrectly solved 5 times
+                #TODO: save and make claim?
+                pass
+
         except:
-            print "Unsuccessful processing of zone-h page\n"
+            print "Unsuccessful processing of zone-h.org page\n"
             print traceback.format_exc()
             print "\n"
             
@@ -328,7 +393,8 @@ def process_zoneh_pages(f):
     return allData
 
 
-def process_deface_pages(allData):
+
+def process_mirror_pages(allData):
 
         for time, notifier, mirror in allData:
 
@@ -338,19 +404,71 @@ def process_deface_pages(allData):
 
                 browser.get(mirror)
 
-                for i in range(0, ALERT_CONFIRMS + 1):       #broj potvrda alerta: 10 alerta i content
+                for i in range(0, ALERT_CONFIRMS + 1):       #number of alert confirmations plus content
 
                     try:
 
-                        try:
-                            WebDriverWait(browser, 10).until(
-                                        EC.presence_of_element_located((By.TAG_NAME, "iframe"))
-                                        )
-                        except TimeoutException as e:
-                            print "Time elapsed for zone-h page processing\n"
-                            break
-                        else:
-                            time_.sleep(2)  #sigurnosno cekanje ukoliko html nije ucitan do kraja
+                        havepage = False
+
+                        for k in range(1, 5):   #Loop of uncorrectly solved captachas
+
+                            try:
+                                WebDriverWait(browser, 10).until(
+                                            EC.presence_of_element_located((By.TAG_NAME, "iframe"))   #TODO: wait for iframe OR propdeface. How to handle flows in that case?
+                                            )
+
+                            except TimeoutException as e:
+
+                                WebDriverWait(browser, 5).until(
+                                            EC.presence_of_element_located((By.ID, "propdeface"))
+                                            )
+                                
+                                #In case of timeout on iframe, we are checking if captcha is present.
+                                #If captcha is not present generic exception handling code will take over control.
+                                #Next mirror page will tried to be downloaded.
+                                #This differs from v0.9 that continued to scan next page immedatelly.
+                                #Software robustness(resiliency) is kept.
+                                #Timeout message will be printed out as part of GEH code.
+                                #print "Time elapsed for zone-h page processing\n"
+
+                                #Here captcha is resolved
+
+                                cookies = browser.get_cookies()
+                                cookie = ' '.join([i['name'] + '=' + i['value'] + ';' for i in cookies])
+
+                                print browser.page_source
+
+                                url = browser.find_elements_by_xpath("//*[@id='cryptogram']")[0].get_attribute('src')
+
+                                req = urllib2.Request(url)
+                                req.add_header('Cookie', cookie)
+                                resp = urllib2.urlopen(req)
+                                pic = resp.read()
+
+                                f = open("captcha.png", "wb")
+                                f.write(pic)
+                                f.close()
+                              
+                                try: 
+                                    solution = captcha.solve_captcha('captcha.png')
+                                    print "Captcha solved in process_mirror_pages (%s).\n" % solution
+                                    elem = browser.find_element_by_name("captcha")
+                                    elem.send_keys(solution)
+                                    elem.submit()
+                                except:
+                                    print "Something wrong in solving captcha.\n"
+                                    print traceback.format_exc()
+                                    print "\n"
+
+                            else:
+                                havepage = True
+                                break   #break out of captcha solving loop
+
+
+
+                        if havepage:
+
+                            time_.sleep(2)  #safety hold in case HTML is not fully loaded 
 
                             mirrorsrc = browser.find_element_by_tag_name('iframe').get_attribute('src')
                             url = browser.find_elements_by_xpath("//*[@id='propdeface']/ul/li[2]/ul[1]/li[2]")[0].text.split(": ")[1].strip()
@@ -359,19 +477,25 @@ def process_deface_pages(allData):
                             print "\n"
 
                             processDefacement(time, notifier, url, mirrorsrc)
-                            break
+                            break   #break out of alert confirmation loop
+
+                        else:
+
+                            #captchas uncorrectly solved 5 times
+                            #TODO: save and make claim?
+                            break   #break out of alert confirmation loop
 
 
                     except UnexpectedAlertPresentException as e:
-                        print "Accepting alert in process_deface_pages\n"
-                        #potvrda alerta ovdje
+                        print "Accepting alert in process_mirror_pages.\n"
+                        #confirmation of alert here
                         Alert(browser).accept()
                         if i == ALERT_CONFIRMS:
                             print traceback.format_exc()
                             print "\n"
 
             except:
-                print "Unsuccessful processing of zone-h page\n"
+                print "Unsuccessful processing in process_mirror_pages.\n"
                 print traceback.format_exc()
                 print "\n"                    
 
@@ -385,7 +509,7 @@ def main():
         f = open("deface.temp", "r+")
 
         allData = process_zoneh_pages(f)
-        process_deface_pages(allData)
+        process_mirror_pages(allData)
 
         if not allData == []:
             ttime, tnotifier, tmirror = allData[-1] #index not in range error znaci da se nije pojavio novi deface page od zadnjeg pokretanja
@@ -409,8 +533,8 @@ def main():
  
 
 
-print "----------------------------------------------------%s\
----------------------------------------------------------------------------------\n"  % (time.strftime("%c"),)
+print "--------------------------------------------------------------------%s\
+---------------------------------------------------------------------\n"  % (time.strftime("%c"),)
 main()
 
 

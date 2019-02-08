@@ -1,11 +1,17 @@
-##ignore all logs
-**/*.log
 
 ##ignore tools temporary and input files
 #last zone-h entry saved in database
-/deface.temp    
+/deface.temp
 #list of domains for crawler to scan
 /domains.file
+#downloaded and forwarded captcha image
+/captcha.png
 
 ##ignore Vim swap files
 **/*.swp
+
+##ignore Python compiled bytecode files
+**/*.pyc
+
+##ignore all logs
+**/*.log
