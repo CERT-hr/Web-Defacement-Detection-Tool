@@ -32,6 +32,7 @@ import time
 import urllib2
 
 import captcha
+import rateLimit
 
 sys.stdout = codecs.getwriter('utf-8')(sys.stdout)  #needed for sending Unicode to file
 
@@ -42,6 +43,10 @@ display = Display(visible=0, size=(800, 600))
 display.start()
 
 browser = webdriver.Chrome('/home/marko/workspace/chromedriver')
+
+#browser.get can be called only once each 5 seconds,
+#to reduce possibility of zone-h blacklisting.
+browser_get = rateLimit.rateLimit(0.2, browser.get)
 
 class Stale():
     pass
@@ -199,7 +204,7 @@ def getElements(mirrorsrc):
     #creating dictionary of Elements
     allElems = {'alerts': [], 'texts': [], 'images': [], 'backgroundImages': [], 'music': []}
 
-    browser.get(mirrorsrc)
+    browser_get(mirrorsrc)
 
     try:
 
@@ -302,7 +307,7 @@ def process_zoneh_pages(f):
             print "Downloading zone-h.org page: %s\n" % pagenum
 
             #TODO: Connecting over TOR (captcha recognition and change of circuit)
-            browser.get('http://zone-h.org/archive/page=%d' % (pagenum,))
+            browser_get('http://zone-h.org/archive/page=%d' % (pagenum,))
             
             havepage = False
 
@@ -402,7 +407,7 @@ def process_mirror_pages(allData):
 
                 print notifier, time, mirror
 
-                browser.get(mirror)
+                browser_get(mirror)
 
                 for i in range(0, ALERT_CONFIRMS + 1):       #number of alert confirmations plus content
 
