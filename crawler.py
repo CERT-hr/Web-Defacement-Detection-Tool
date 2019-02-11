@@ -1,5 +1,3 @@
-__author__ = "Marko Maric"
-__copyright__ = "Copyright 2018, Croatian Academic and Research Network (CARNET)"
 
 from pyvirtualdisplay import Display
 
@@ -25,7 +23,9 @@ import psycopg2
 
 import traceback
 
-import spamsum
+import ssdeep
+import similarity
+
 
 
 conn = psycopg2.connect("dbname='webdfcdb4' user='webdfc' host='localhost' password='webdfc'")
@@ -138,15 +138,15 @@ def calculateFuzzy(elements):
                         raise e
 
             elements[key] = filter(lambda (x, y, z): not y == None, \
-                            map(  lambda x: (None, None, x) if pics[x] == None else (pics[x], spamsum.spamsum(pics[x]), x) , value))
+                            map(  lambda x: (None, None, x) if pics[x] == None else (pics[x], ssdeep.hash(pics[x]), x) , value))
 
         elif key in ('alerts', 'texts'):
 
-            elements[key] = map(  lambda x: (x, spamsum.spamsum(x.encode('utf-8')), None) , value)
+            elements[key] = map(  lambda x: (x, ssdeep.hash(x.encode('utf-8')), None) , value)
 
         else:   #music
 
-            elements[key] = map(lambda x: (x.split(u'?')[0], spamsum.spamsum(x.split(u'?')[0]), x), value) 
+            elements[key] = map(lambda x: (x.split(u'?')[0], ssdeep.hash(x.split(u'?')[0]), x), value) 
 
     return elements
 
@@ -314,8 +314,8 @@ def similarityIndex(elementsWebpage, sdefaces):
     for i in sdefaces:
         matchesTable.append([])
         for j in elementsWebpage:
-            a = spamsum.spamsum(i)
-            b = spamsum.spamsum(j)
+            a = ssdeep.hash(i)
+            b = ssdeep.hash(j)
             matchesTable[-1].append(spamsum.match(a, b))
 
     if len(sdefaces) > len(elementsWebpage):
@@ -343,40 +343,118 @@ def similarityIndex(elementsWebpage, sdefaces):
     return mSum*1.0/len(sdefaces)
             
 
+#greedy
+def simindex(sign, web, size):
+
+    if size == 'H':
+        sign1 = map(lambda x: ssdeep.hash(str(x)), sign)
+        web1 = map(lambda x: ssdeep.hash(str(x)), web)
+    else:
+        sign1 = map(lambda x: str(x), sign)
+        web1 = map(lambda x: str(x), web)
+
+    table = []
+
+    for s in sign1:
+
+        table.append(map(lambda x: similarity.compare(x, s), web1))
+
+    if len(web1) < len(sign1):
+
+        table = map(lambda x: x + [0] * (len(sign1) - len(web1)), table)
+
+    maxi = 0
+    for t in range(0, len(table)):
+
+        #print map(lambda x: len(x), table)
+        m = max(table[t])
+        maxi += m
+        i = table[t].index(m)
+
+        for k in range(t+1, len(table)):
+            
+            del table[k][i]
+
+    return maxi*1.0/len(sign)
+            
+
+def match(sign, web):
+
+    sumi = 0
+
+    for k in sign.keys():
+    
+        if k in web:
+
+            if k[0] == 'L':
+                n = simindex(sign[k], web[k], 'L')
+            else:
+                n = simindex(sign[k], web[k], 'H')
+
+        else:
+
+            n = 0
+
+        sumi += n
+
+    return sumi*1.0/len(sign)
+
+
 #CRAWLING
 def processDomainsList(domains, table):
-    #prepare multisets of retrived (type, elements) from database
 
-    table = map(lambda x: x[:3] + ( multiset(map(lambda y: (str(y[0]), y[1]), x[3])) ,) + x[4:], table)        
-    
+    elemTypes = ['Lalerts', 'Ltexts', 'Limages', 'LbackgroundImages', 'Lmusic', 'Halerts', 'Htexts', 'Himages', 'HbackgroundImages', 'Hmusic']
+
+    t2=[]
+
+    for t in table:
+        elemDict = {}
+        for elemType in elemTypes:
+            
+            p = map(lambda x: x[1], filter(lambda x: str(x[0]) == elemType, t[3]))
+            if p:
+                elemDict[elemType] = p
+
+        t2.append((t[0], t[1], t[2], elemDict))            
+            
     for domain in domains:
          
          #TODO: map from domain to webpage URL. Is it needed?
          elementsWebpage = processWebpage(domain)
-         elementsWebpage = multiset(elementsWebpage)
+         #elementsWebpage = multiset(elementsWebpage)
+         #print "--------------------------------------elementsWebpage-----------------------------------------------------------------"
+         #print elementsWebpage
 
-         elementsWebpage = spamsum.spamsum(serializeElements(elementsWebpage))
+         #elementsWebpage = spamsum.spamsum(serializeElements(elementsWebpage))
 
-         notfound = True
+         allElems = {'alerts': [], 'texts': [], 'images': [], 'backgroundImages': [], 'music': []}
+         allElems = {'alerts': [], 'texts': [], 'images': [], 'backgroundImages': [], 'music': []}
+            
+         elemsWebpage = {}
+         for elemType in elemTypes:
+             p = map(lambda x: x[1], filter(lambda x: x[0] == elemType, elementsWebpage))
 
-         for row in table:
+             if p:
+                elemsWebpage[elemType] = p
 
-            sdeface = spamsum.spamsum(serializeElements(row[3]))
-            #sdeface = row[3]
+            
+         maxN = -1
+         signMax = []
+         for sign in t2:
 
-            #similarity = similarityIndex(map(lambda x: x[1], elementsWebpage), map(lambda x: x[1], sdeface))
-            similarity = spamsum.match(elementsWebpage, sdeface)
+            N = match(sign[3], elemsWebpage)
 
-            if similarity >= 70: #TODO: Comparison Strategy!!
-    
-                notfound = False
-                print "Defacement found at %s -> Notifier: %s, Signature ID: %s, Detected on: %s (%s%%)" % \
-                                            (domain.strip(), row[0], row[2], row[1], similarity)
-                break
+            if N > maxN:
+                maxN = N
+                signMax = sign[0:3]
 
-         if notfound:
-                print "No defacement found (%s)" % (domain.strip(),)
+         if maxN >= 0.75:
+             print "Defacement found at %s -> Notifier: %s, Signature ID: %s, Detected on: %s (%s%%)" % \
+                                        (domain.strip(), signMax[0], signMax[2], signMax[1], maxN*100)
+         else:
+             print "No defacement found (%s)" % (domain.strip(),)
 
+            
 
 
 def main():
