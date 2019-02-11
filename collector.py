@@ -36,7 +36,7 @@ import rateLimit
 
 sys.stdout = codecs.getwriter('utf-8')(sys.stdout)  #needed for sending Unicode to file
 
-conn = psycopg2.connect("dbname='webdfcdb4' user='webdfc' host='localhost' password='webdfc'")
+conn = psycopg2.connect("dbname='webdfcdb5' user='webdfc' host='localhost' password='webdfc'")
 
 
 display = Display(visible=0, size=(800, 600))
@@ -44,9 +44,17 @@ display.start()
 
 browser = webdriver.Chrome('/home/marko/workspace/chromedriver')
 
-#browser.get can be called only once each 5 seconds,
+#browser.get can be called only once each 4 seconds,
 #to reduce possibility of zone-h blacklisting.
-browser_get = rateLimit.rateLimit(0.2, browser.get)
+#Used for access limit to zone-h.org and zonehmirror.org.
+browser_get = rateLimit.rateLimit(0.25, browser.get)
+
+#urllib2.urlopen() can be called only once each 4 seconds,
+#to reduce possibility of zone-h blacklisting.
+#Used for access limit to zone-h.org's captcha.png and
+#downloading images and backgroundImages.
+urllib2_urlopen = rateLimit.rateLimit(0.25, urllib2.urlopen)
+
 
 class Stale():
     pass
@@ -153,9 +161,8 @@ def insertInDatabase(notifier, time, url, elements, mirrorsrc):
     conn.commit()
     
 
+#TODO: It downloads content also when actually it should be done by getElementContent
 def calculateFuzzy(elements):
-    #print "**********************************************************************************************\n"
-    #print elements
 
     pics = {}
     for key, value in elements.iteritems():
@@ -166,7 +173,7 @@ def calculateFuzzy(elements):
                 try:
                     if not url in pics:
                         #TODO: images are already present on system. How to avoid double download. Doing crawling this will be crucial.
-                        pic = urllib2.urlopen(url).read()
+                        pic = urllib2_urlopen(url).read()
                         pics[url] = pic
                 except (urllib2.HTTPError, urllib2.URLError) as e:
                     print "Not able to download image (%s).\n" % (url, )
@@ -341,7 +348,7 @@ def process_zoneh_pages(f):
 
                     req = urllib2.Request(url)
                     req.add_header('Cookie', cookie)
-                    resp = urllib2.urlopen(req)
+                    resp = urllib2_urlopen(req)
                     pic = resp.read()
 
                     f = open("captcha.png", "wb")
@@ -441,13 +448,11 @@ def process_mirror_pages(allData):
                                 cookies = browser.get_cookies()
                                 cookie = ' '.join([i['name'] + '=' + i['value'] + ';' for i in cookies])
 
-                                print browser.page_source
-
                                 url = browser.find_elements_by_xpath("//*[@id='cryptogram']")[0].get_attribute('src')
 
                                 req = urllib2.Request(url)
                                 req.add_header('Cookie', cookie)
-                                resp = urllib2.urlopen(req)
+                                resp = urllib2_urlopen(req)
                                 pic = resp.read()
 
                                 f = open("captcha.png", "wb")
