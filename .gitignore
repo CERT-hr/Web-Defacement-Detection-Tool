@@ -6,6 +6,8 @@
 /domains.file
 #downloaded and forwarded captcha image
 /captcha.png
+#Dictionary of .hr domain's corresponding ASNs
+/ASNsDomains.hr
 
 ##ignore Vim swap files
 **/*.swp
@@ -15,3 +17,6 @@
 
 ##ignore all logs
 **/*.log
+
+##ignore compiled shared objects
+**/*.so
