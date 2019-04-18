@@ -7,7 +7,7 @@ import psycopg2
 import iptoolsng
 import datetime
 
-conn = psycopg2.connect("dbname='webdfcdb5' user='webdfc' host='localhost' password='webdfc'")
+conn = psycopg2.connect("dbname='webdfcdb6' user='webdfc' host='localhost' password='webdfc'")
 curr = conn.cursor()
 
 
@@ -19,7 +19,7 @@ def list_(multiset):
 
     return [m for c, m in multiset for i in range(0, c)]
 
-
+'''
 #######################################################################MAINTAINING DATABASE SIZE################################################################################
 
 curr.execute("SELECT notifier.id, array_agg(DISTINCT defaces.id), array_agg(DISTINCT defaces_elements_defaces.id), array_agg(DISTINCT elements_defaces.id) FROM notifier \
@@ -86,7 +86,7 @@ curr.close()
 conn.commit()
 
 ########################################################################MAINTAINING DATABASE SIZE########################################################################
-
+'''
 
 
 #################################################################NOTIFIERS, NEW DEFACEMENTS, ALGORITHM###################################################################
@@ -94,6 +94,7 @@ conn.commit()
 
 #************LAST ID**************
 #Current start id
+#TODO: Must exist on first run with value 0.
 f = open("id.temp", "r")
 idstart = int(f.read())
 f.close()
@@ -180,10 +181,33 @@ for notifierid in notifiersid:
     print "elements_table:"
     print elements_table
 
-    output, _ = WebDfcAlg.WebDfcAlg(elements_table, 3)
+    output, sets = WebDfcAlg.WebDfcAlg(elements_table, 3)
+
+    #Empty signature [] means that I probably have too low AA.
+    #Which means there is bigger uncertiancy that other outputs of signatures
+    #are uncomplete. Anyway now I need SOME results for project so I will just
+    #omit empty signature.
+
+    output = filter(lambda x: not x==[], output)
 
     print "alg output:"
     print output
+
+    #FOR TEST
+
+    for o, s in zip(output, sets):
+
+        #Size of all in elements_table
+
+        size = 0
+
+        for ss in s:
+
+            size += len(elements_table[ss])
+
+        print "Diff: %s" % (size - len(o)*len(s))
+
+    #FOR TEST
 
     if not output:  #algorithm did not detected any signature
         continue
@@ -280,7 +304,7 @@ conn.commit()
     
 #################################################################NOTIFIERS, NEW DEFACEMENTS, ALGORITHM###################################################################
 
-
+'''
 ####################################################################DELETING OLD DEFACES SIGNATURES######################################################################
 
 
@@ -350,7 +374,7 @@ conn.commit()
 
 
 ####################################################################DELETING OLD DEFACES SIGNATURES######################################################################
-
+'''
 conn.close()
 
 

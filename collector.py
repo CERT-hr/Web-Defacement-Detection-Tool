@@ -34,9 +34,10 @@ import urllib2
 import captcha
 import rateLimit
 
+#TODO: Add flushing to stdout.
 sys.stdout = codecs.getwriter('utf-8')(sys.stdout)  #needed for sending Unicode to file
 
-conn = psycopg2.connect("dbname='webdfcdb5' user='webdfc' host='localhost' password='webdfc'")
+conn = psycopg2.connect("dbname='webdfcdb6' user='webdfc' host='localhost' password='webdfc'")
 
 
 display = Display(visible=0, size=(800, 600))
@@ -278,6 +279,7 @@ def getElements(mirrorsrc):
                 allElems['music'] = []
 
                 if i == ALERT_CONFIRMS:
+                    print "Too many alerts to confirm, maybe something is not ok.\n"
                     print traceback.format_exc()
                     print "\n"
 
