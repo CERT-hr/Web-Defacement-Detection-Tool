@@ -1,3 +1,6 @@
+Development of this tool was a part of the Action "Increase of National CERT capacities and enhancement of cooperation on national and  European level - GrowCERT" which was co-financed through the Connecting Europe Facility (CEF) Telecom program of the European Commission, contract number: INEA / CEF / ICT / A2016 / 1334308 (Action No: 2016-HR-IA-0085)
+
+The contents of this tool is the sole responsibility of Croatian Academic and Research Network - CARNET / National CERT and do not necessarily reflect the opinion of the European Union. 
 
 # Web Defacement Detection Tool
 
@@ -40,3 +43,5 @@ Script implementing signature noise elimination algorithm. Algorithm is describe
 
 ### schema.sql
 pg_dump generated database schema 
+
+![alt text]https://github.com/HR-CERT/Web-Defacement-Detection-Tool/blob/master/en_horizontal_cef_logo_2.png
