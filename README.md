@@ -44,4 +44,4 @@ Script implementing signature noise elimination algorithm. Algorithm is describe
 ### schema.sql
 pg_dump generated database schema 
 
-![](./en_horizontal_cef_logo_2.png?raw=True =200x)
+![](./en_horizontal_cef_logo_2.png?raw=True =200x50)
