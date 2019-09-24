@@ -44,4 +44,4 @@ Script implementing signature noise elimination algorithm. Algorithm is describe
 ### schema.sql
 pg_dump generated database schema 
 
-![alt text]https://github.com/HR-CERT/Web-Defacement-Detection-Tool/blob/master/en_horizontal_cef_logo_2.png
+![alt text]https://github.com/HR-CERT/Web-Defacement-Detection-Tool/blob/master/en_horizontal_cef_logo_2.png?raw=true
